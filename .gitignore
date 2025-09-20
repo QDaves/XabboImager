@@ -1,0 +1,12 @@
+# Build output
+/bin/
+/obj/
+/.vs/
+# User-specific
+*.user
+*.suo
+*.userprefs
+# Logs
+*.log
+# Publish artifacts (kept out of repo by default)
+/bin/**/publish/

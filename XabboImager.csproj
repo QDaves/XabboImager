@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>XabboImager</AssemblyName>
+    <RootNamespace>XabboImager</RootNamespace>
+    <NoWarn>CA1416</NoWarn>
+    <Version>1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Xabbo.GEarth" Version="1.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\sprites.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="STUDYTHISSHIT\**\*.cs" />
+    <EmbeddedResource Remove="STUDYTHISSHIT\**\*.*" />
+    <None Remove="STUDYTHISSHIT\**\*.*" />
+    <Content Remove="STUDYTHISSHIT\**\*.*" />
+  </ItemGroup>
+
+  
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <IncludeAllContentForSelfExtract>false</IncludeAllContentForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+</Project>
