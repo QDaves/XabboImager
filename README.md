@@ -1,10 +1,5 @@
 XabboImager
 
-A small Extension which works with G‑Earth inject Habbo pixel art or Text.
+A small Extension which works with G‑Earth and injects pixel art/Text into Habbo Photos.
 
-Build
-
-- x64:
-dotnet publish XabboImager.csproj -c Release -r win-x64
-- x86:
-dotnet publish XabboImager.csproj -c Release -r win-x86
+<img width="730" height="540" alt="screenshot" src="https://github.com/user-attachments/assets/519ee67e-656f-4c69-8280-653cc3bf695a" />
