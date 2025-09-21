@@ -235,13 +235,8 @@ namespace XabboImager
             var counts = svc.GetNonEditorCounts();
             int availablePlanes = Math.Max(0, MAX_PLANES - counts.planes - 2);
             int availableSprites = Math.Max(0, MAX_SPRITES - counts.sprites - items.Count);
-            int stride = pxW * 4;
-            int visible = 0;
-            for (int y=0;y<pxH;y++) for (int x=0;x<pxW;x++) { int i=y*stride + x*4; if (pxBuf[i+3] > 0) visible++; }
-            int planeUse = Math.Min(availablePlanes, visible);
-            int remain = visible - planeUse;
-            int spriteUse = Math.Min(availableSprites, Math.Max(0, remain));
-            int over = Math.Max(0, visible - planeUse - spriteUse);
+            var est = estimateUsage(pxBuf, pxW, pxH, alphaVal, availablePlanes, availableSprites);
+            int over = Math.Max(0, est.over);
             if (overflow != null) overflow.Text = over > 0 ? ($"Pixel Overflow: {over}") : "";
         }
 
@@ -311,32 +306,83 @@ namespace XabboImager
 
         static void BuildPixelElements(byte[] buf, int w, int h, int ox, int oy, JsonArray planes, JsonArray sprites)
         {
-            var pixels = new List<(int x,int y,int color)>();
-            int stride = w*4;
-            for (int y=0;y<h;y++)
-            for (int x=0;x<w;x++)
-            {
-                int i = y*stride + x*4;
-                byte a = buf[i+3]; if (a==0) continue;
-                int b = buf[i+0]; int g = buf[i+1]; int r = buf[i+2];
-                int col = (r<<16)|(g<<8)|b;
-                pixels.Add((ox+x, oy+y, col));
-            }
+            int stride = w * 4;
+            bool[] used = new bool[w * h];
             double baseZ = -350;
             int planeCount = 0;
-            foreach (var p in pixels)
+            int planeLimit = Math.Max(0, MAX_PLANES - 2);
+            int tol = 48;
+
+            for (int y = 0; y <= h - 3 && planeCount < planeLimit; y++)
             {
-                if (planeCount >= MAX_PLANES - 2) break;
+                for (int x = 0; x <= w - 3 && planeCount < planeLimit; x++)
+                {
+                    bool ok = true;
+                    int sumR = 0, sumG = 0, sumB = 0;
+                    for (int dy = 0; dy < 3 && ok; dy++)
+                    for (int dx = 0; dx < 3 && ok; dx++)
+                    {
+                        int xx = x + dx; int yy = y + dy; int idx = yy * stride + xx * 4; int pi = yy * w + xx;
+                        if (used[pi]) { ok = false; break; }
+                        if (buf[idx + 3] == 0) { ok = false; break; }
+                        int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
+                        sumR += r; sumG += g; sumB += b;
+                    }
+                    if (!ok) continue;
+                    int avgR = sumR / 9; int avgG = sumG / 9; int avgB = sumB / 9;
+                    for (int dy = 0; dy < 3 && ok; dy++)
+                    for (int dx = 0; dx < 3 && ok; dx++)
+                    {
+                        int xx = x + dx; int yy = y + dy; int idx = yy * stride + xx * 4;
+                        int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
+                        if (Math.Abs(r - avgR) > tol || Math.Abs(g - avgG) > tol || Math.Abs(b - avgB) > tol) { ok = false; break; }
+                    }
+                    if (!ok) continue;
+                    int color = (avgR << 16) | (avgG << 8) | avgB;
+                    var plane = new JsonObject
+                    {
+                        ["color"] = color,
+                        ["z"] = baseZ + planeCount * 0.00001,
+                        ["cornerPoints"] = new JsonArray
+                        {
+                            new JsonObject{["x"]=ox + x + 3,["y"]=oy + y + 3},
+                            new JsonObject{["x"]=ox + x,["y"]=oy + y + 3},
+                            new JsonObject{["x"]=ox + x + 3,["y"]=oy + y},
+                            new JsonObject{["x"]=ox + x,["y"]=oy + y}
+                        },
+                        ["texCols"] = new JsonArray(),
+                        ["masks"] = new JsonArray(),
+                        ["bottomAligned"] = false,
+                        ["type"] = "pixel_art_plane"
+                    };
+                    planes.Add(plane);
+                    for (int dy = 0; dy < 3; dy++)
+                    for (int dx = 0; dx < 3; dx++)
+                    {
+                        int xx = x + dx; int yy = y + dy; int pi = yy * w + xx;
+                        used[pi] = true;
+                    }
+                    planeCount++;
+                }
+            }
+
+            for (int y = 0; y < h && planeCount < planeLimit; y++)
+            for (int x = 0; x < w && planeCount < planeLimit; x++)
+            {
+                int idx = y * stride + x * 4; int pi = y * w + x;
+                if (used[pi]) continue; if (buf[idx + 3] == 0) continue;
+                int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
+                int color = (r << 16) | (g << 8) | b;
                 var plane = new JsonObject
                 {
-                    ["color"] = p.color,
-                    ["z"] = baseZ + planeCount*0.00001,
+                    ["color"] = color,
+                    ["z"] = baseZ + planeCount * 0.00001,
                     ["cornerPoints"] = new JsonArray
                     {
-                        new JsonObject{["x"]=p.x+1,["y"]=p.y+1},
-                        new JsonObject{["x"]=p.x,["y"]=p.y+1},
-                        new JsonObject{["x"]=p.x+1,["y"]=p.y},
-                        new JsonObject{["x"]=p.x,["y"]=p.y}
+                        new JsonObject{["x"]=ox + x + 1,["y"]=oy + y + 1},
+                        new JsonObject{["x"]=ox + x,["y"]=oy + y + 1},
+                        new JsonObject{["x"]=ox + x + 1,["y"]=oy + y},
+                        new JsonObject{["x"]=ox + x,["y"]=oy + y}
                     },
                     ["texCols"] = new JsonArray(),
                     ["masks"] = new JsonArray(),
@@ -344,24 +390,28 @@ namespace XabboImager
                     ["type"] = "pixel_art_plane"
                 };
                 planes.Add(plane);
+                used[pi] = true;
                 planeCount++;
             }
-            int spriteCount = 0; int spriteNameIndex = 0;
-            double spriteBaseZ = baseZ - 100;
-            for (int i=planeCount; i<pixels.Count && spriteCount<MAX_SPRITES; i++)
+
+            int spriteCount = 0; int spriteNameIndex = 0; double spriteBaseZ = baseZ - 100;
+            for (int y = 0; y < h && spriteCount < MAX_SPRITES; y++)
+            for (int x = 0; x < w && spriteCount < MAX_SPRITES; x++)
             {
-                var p = pixels[i];
+                int idx = y * stride + x * 4; int pi = y * w + x;
+                if (used[pi]) continue; if (buf[idx + 3] == 0) continue;
+                int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
+                int color = (r << 16) | (g << 8) | b;
                 var name = "pixel";
                 var pool = Instance?.spritePool;
-                if (pool != null && pool.Count > 0)
-                    name = pool[spriteNameIndex % pool.Count];
+                if (pool != null && pool.Count > 0) name = pool[spriteNameIndex % pool.Count];
                 var sp = new JsonObject
                 {
                     ["flipH"] = false,
-                    ["x"] = p.x,
-                    ["y"] = p.y,
-                    ["z"] = spriteBaseZ - spriteCount*0.00001,
-                    ["color"] = p.color,
+                    ["x"] = ox + x,
+                    ["y"] = oy + y,
+                    ["z"] = spriteBaseZ - spriteCount * 0.00001,
+                    ["color"] = color,
                     ["name"] = name,
                     ["type"] = "pixel_art_sprite"
                 };
@@ -482,29 +532,86 @@ namespace XabboImager
         {
             if (srcImg == null) return;
             var counts = svc.GetNonEditorCounts();
-            int availablePlanes = Math.Max(0, MAX_PLANES - counts.planes);
-            int availableSprites = Math.Max(0, MAX_SPRITES - counts.sprites);
-            int limit = availablePlanes + availableSprites;
-            var fc = new FormatConvertedBitmap(srcImg, PixelFormats.Pbgra32, null, 0);
-            var wb = new WriteableBitmap(fc);
-            int stride = wb.PixelWidth * 4;
-            byte[] tmp = new byte[wb.PixelHeight * stride];
-            wb.CopyPixels(tmp, stride, 0);
-            int visible = 0;
-            for (int y=0;y<wb.PixelHeight;y++) for (int x=0;x<wb.PixelWidth;x++) { int i=y*stride + x*4; if (tmp[i+3] > alphaVal) visible++; }
-            if (visible == 0) visible = 1;
-            bool hasTransp = visible < (wb.PixelWidth * wb.PixelHeight);
-            int maxTotalSolid = 961;
-            if (!hasTransp) limit = Math.Min(limit, maxTotalSolid);
-            double sc = Math.Sqrt((double)limit / visible) * 0.99; sc = Math.Min(sc, 1.0);
-            int sw = (int)Math.Max(1, Math.Floor(srcImg.PixelWidth * sc));
-            int sh = (int)Math.Max(1, Math.Floor(srcImg.PixelHeight * sc));
-            sw = Math.Min(sw, srcImg.PixelWidth); sh = Math.Min(sh, srcImg.PixelHeight);
-            autoScalePercent = Math.Clamp(((double)sw / srcImg.PixelWidth * 100.0), 1.0, 100.0);
+            int availablePlanes = Math.Max(0, MAX_PLANES - counts.planes - 2);
+            int availableSprites = Math.Max(0, MAX_SPRITES - counts.sprites - items.Count);
+            double lo = 1.0, hi = 100.0, best = 1.0;
+            for (int it = 0; it < 9; it++)
+            {
+                double mid = (lo + hi) / 2.0;
+                int sw = Math.Max(1, (int)Math.Floor(srcImg.PixelWidth * (mid / 100.0)));
+                int sh = Math.Max(1, (int)Math.Floor(srcImg.PixelHeight * (mid / 100.0)));
+                var tb = new TransformedBitmap(srcImg, new ScaleTransform(sw/(double)srcImg.PixelWidth, sh/(double)srcImg.PixelHeight));
+                RenderOptions.SetBitmapScalingMode(tb, BitmapScalingMode.NearestNeighbor);
+                var fc = new FormatConvertedBitmap(tb, PixelFormats.Pbgra32, null, 0);
+                var wb = new WriteableBitmap(fc);
+                int stride = wb.PixelWidth * 4;
+                byte[] tmp = new byte[wb.PixelHeight * stride];
+                wb.CopyPixels(tmp, stride, 0);
+                for (int y=0;y<wb.PixelHeight;y++) for (int x=0;x<wb.PixelWidth;x++) { int i=y*stride + x*4; if (tmp[i+3] <= alphaVal) { tmp[i]=0; tmp[i+1]=0; tmp[i+2]=0; tmp[i+3]=0; } }
+                var est = estimateUsage(tmp, sw, sh, alphaVal, availablePlanes, availableSprites);
+                if (est.over > 0) hi = mid; else { best = mid; lo = mid; }
+            }
+            autoScalePercent = Math.Clamp(best, 1.0, 100.0);
             if (applyToSlider)
             {
                 internalScaleSet = true; scale.Value = SliderFromPercent(autoScalePercent); internalScaleSet = false; userScaled = false;
             }
+        }
+
+        static (int planes, int sprites, int over) estimateUsage(byte[] buf, int w, int h, int alpha, int availPlanes, int availSprites)
+        {
+            int stride = w * 4;
+            bool[] used = new bool[w * h];
+            int tol = 48;
+            int planes = 0;
+            for (int y = 0; y <= h - 3 && planes < availPlanes; y++)
+            {
+                for (int x = 0; x <= w - 3 && planes < availPlanes; x++)
+                {
+                    bool ok = true;
+                    int sumR = 0, sumG = 0, sumB = 0;
+                    for (int dy = 0; dy < 3 && ok; dy++)
+                    for (int dx = 0; dx < 3 && ok; dx++)
+                    {
+                        int xx = x + dx; int yy = y + dy; int idx = yy * stride + xx * 4; int pi = yy * w + xx;
+                        if (used[pi]) { ok = false; break; }
+                        if (buf[idx + 3] <= alpha) { ok = false; break; }
+                        int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
+                        sumR += r; sumG += g; sumB += b;
+                    }
+                    if (!ok) continue;
+                    int avgR = sumR / 9; int avgG = sumG / 9; int avgB = sumB / 9;
+                    for (int dy = 0; dy < 3 && ok; dy++)
+                    for (int dx = 0; dx < 3 && ok; dx++)
+                    {
+                        int xx = x + dx; int yy = y + dy; int idx = yy * stride + xx * 4;
+                        int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
+                        if (Math.Abs(r - avgR) > tol || Math.Abs(g - avgG) > tol || Math.Abs(b - avgB) > tol) { ok = false; break; }
+                    }
+                    if (!ok) continue;
+                    for (int dy = 0; dy < 3; dy++)
+                    for (int dx = 0; dx < 3; dx++)
+                    {
+                        int xx = x + dx; int yy = y + dy; int pi = yy * w + xx;
+                        used[pi] = true;
+                    }
+                    planes++;
+                }
+            }
+            int singles = 0;
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int idx = y * stride + x * 4; int pi = y * w + x;
+                if (used[pi]) continue;
+                if (buf[idx + 3] > alpha) singles++;
+            }
+            int planeRemain = Math.Max(0, availPlanes - planes);
+            int planeSingles = Math.Min(planeRemain, singles);
+            singles -= planeSingles;
+            int sprites = Math.Min(availSprites, Math.Max(0, singles));
+            int over = Math.Max(0, singles - sprites);
+            return (planes + planeSingles, sprites, over);
         }
 
         static double PercentFromSlider(double controlVal)

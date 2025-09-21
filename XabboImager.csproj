@@ -38,4 +38,23 @@
     <DebugType>none</DebugType>
   </PropertyGroup>
 
+  <Target Name="RenamePublishedExe" AfterTargets="Publish">
+    <PropertyGroup>
+      <Suffix Condition="'$(RuntimeIdentifier)'=='win-x64'">win_64</Suffix>
+      <Suffix Condition="'$(RuntimeIdentifier)'=='win-x86'">win_86</Suffix>
+      <SrcExe>$(PublishDir)$(AssemblyName).exe</SrcExe>
+      <DstExe>$(PublishDir)$(AssemblyName)_$(Suffix).exe</DstExe>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(Suffix)' != '' and Exists('$(SrcExe)')">
+      <PublishedExe Include="$(SrcExe)" />
+    </ItemGroup>
+    <Copy Condition="'$(Suffix)' != '' and Exists('$(SrcExe)')"
+          SourceFiles="@(PublishedExe)"
+          DestinationFiles="$(DstExe)"
+          OverwriteReadOnlyFiles="true"
+          SkipUnchangedFiles="false" />
+    <Delete Condition="'$(Suffix)' != '' and Exists('$(DstExe)') and Exists('$(SrcExe)')"
+            Files="@(PublishedExe)" />
+  </Target>
+
 </Project>

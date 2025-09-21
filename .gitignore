@@ -4,6 +4,5 @@
 *.user
 *.suo
 *.userprefs
-# Logs
 *.log
 /bin/**/publish/
