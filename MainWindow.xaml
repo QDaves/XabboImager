@@ -46,6 +46,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -102,7 +103,28 @@
                         <Slider Grid.Column="1" x:Name="scale" Minimum="1" Maximum="100" Height="24" VerticalAlignment="Center" Margin="1,0,0,0" Background="#000F1215"/>
                     </Grid>
 
-                    <StackPanel Grid.Row="7" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,94,0,0" Height="44" VerticalAlignment="Top" HorizontalAlignment="Right">
+                    <Grid Grid.Row="7" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="mode" Margin="0,0,10,0" Foreground="{StaticResource txt}" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" x:Name="modeSel" Height="24" VerticalAlignment="Center" Background="#000F1215" SelectionChanged="ModeSel_Changed">
+                            <ComboBoxItem Tag="old" Content="pixels 1x1 (mixed)"/>
+                            <ComboBoxItem Tag="mix3" Content="pixels 3x3 (mixed)" IsSelected="True"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <Grid Grid.Row="8" Grid.ColumnSpan="2" Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="zoom" Margin="0,0,10,0" Foreground="{StaticResource txt}" VerticalAlignment="Top"/>
+                        <CheckBox Grid.Column="1" x:Name="zoomForce" VerticalAlignment="Top" Checked="ZoomForce_Changed" Unchecked="ZoomForce_Changed" HorizontalAlignment="Left" Margin="0,-2,0,0" Width="23"/>
+                    </Grid>
+
+                    <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,94,0,0" Height="44" VerticalAlignment="Top" HorizontalAlignment="Right">
                         <Button x:Name="btnClear" Content="Clear" Width="80" Height="35" Click="Clear_Click" Margin="0,0,8,0"/>
                         <Button x:Name="btnSave" Content="Apply" Width="80" Height="35" Click="Apply_Click" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="14"/>
                     </StackPanel>
@@ -131,8 +153,9 @@
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="canvas" FontWeight="Bold" Foreground="{StaticResource txt}" Margin="5,0,0,0"/>
-                        <TextBlock Margin="140,0,4,0" Foreground="{StaticResource txt}" Width="84" FontSize="9" VerticalAlignment="Center"><Run Text="Show"/><Run Language="de-de" Text=" "/><Run Text="Server Preview "/></TextBlock>
-                        <Slider x:Name="bgSwitch" Width="31" Height="18" Minimum="0" Maximum="1" Value="1" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="BgSwitch_Changed" Background="#000F1215"/>
+                        <CheckBox x:Name="serverPreview" Content="preview" Margin="12,0,0,0" Foreground="{StaticResource txt}" VerticalAlignment="Center" IsChecked="True" Checked="ServerPreview_Changed" Unchecked="ServerPreview_Changed"/>
+                        <CheckBox x:Name="thumbBox" Content="thumbnail" Margin="12,0,0,0" Foreground="{StaticResource txt}" VerticalAlignment="Center" Checked="Overlay_Changed" Unchecked="Overlay_Changed"/>
+                        <CheckBox x:Name="zoomBox" Content="zoom" Margin="12,0,0,0" Foreground="{StaticResource txt}" VerticalAlignment="Center" Checked="Overlay_Changed" Unchecked="Overlay_Changed"/>
                     </StackPanel>
                     <Border Width="320" Height="320" Margin="0,6,0,0" Background="#0D0F12" Padding="0" BorderThickness="0" SnapsToDevicePixels="True">
                         <Grid>
@@ -147,7 +170,7 @@
             </Border>
         </Grid>
 
-        
+
 
         <Border Grid.Row="2" Background="{StaticResource panel}" BorderBrush="{StaticResource border}" BorderThickness="1,1,1,1" Padding="6,4" Width="652" Height="22" VerticalAlignment="Center">
             <DockPanel LastChildFill="False" Margin="2,0,7,0" Width="625" Height="20" HorizontalAlignment="Left" VerticalAlignment="Center">

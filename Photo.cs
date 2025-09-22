@@ -70,6 +70,11 @@ namespace XabboImager
             return json;
         }
 
+        public void ForceZoom(float z)
+        {
+            zoom = z;
+        }
+
         public JsonArray Planes { get => planes; set => planes = value ?? new JsonArray(); }
         public JsonArray Sprites { get => sprites; set => sprites = value ?? new JsonArray(); }
         public JsonArray Filters { get => filters; set => filters = value ?? new JsonArray(); }

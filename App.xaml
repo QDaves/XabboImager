@@ -124,6 +124,37 @@
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="{StaticResource txt}"/>
             <Setter Property="Margin" Value="4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="0,2,0,2"/>
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid SnapsToDevicePixels="True">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="22"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="box" Width="18" Height="18" CornerRadius="4" Background="#1E232A" BorderBrush="#3A404B" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,2,0,0"/>
+                            <Path x:Name="mark" Grid.Column="0" Data="M 4 10 L 8 13 L 14 6" Stroke="#FFFFFF" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,2,0,0"/>
+                            <ContentPresenter Grid.Column="1" Margin="6,1,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="box" Property="Background" Value="#2A6DF7"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="#2A6DF7"/>
+                                <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="box" Property="BorderBrush" Value="#4F8EF7"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="RadioButton">
             <Setter Property="Foreground" Value="{StaticResource txt}"/>

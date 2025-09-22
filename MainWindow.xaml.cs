@@ -31,6 +31,9 @@ namespace XabboImager
         double autoScalePercent = 100;
         bool userScaled = false;
         bool internalScaleSet = false;
+        int modeVal = 1;
+        bool userMovedOffset = false;
+        
 
         public MainWindow()
         {
@@ -40,7 +43,7 @@ namespace XabboImager
             svc = new Service();
             svc.ServerPreview += url => Dispatcher.Invoke(() => LoadPreview(url));
             svc.Status += s => Dispatcher.Invoke(() => status.Text = s);
-            svc.NewPhoto += () => Dispatcher.Invoke(() => { items.Clear(); pxBuf = null; srcImg = null; Redraw(); });
+            svc.NewPhoto += () => Dispatcher.Invoke(() => { items.Clear(); pxBuf = null; srcImg = null; userMovedOffset = false; Redraw(); });
             svc.Started += () => Dispatcher.Invoke(() => { if (!IsVisible) Show(); Activate(); TryUpdateCanvasBg(); });
             svc.Stopped += () => Dispatcher.Invoke(() => { Hide(); });
             Closing += MainWindow_Closing;
@@ -200,8 +203,24 @@ namespace XabboImager
                 Canvas.SetLeft(im, i.x); Canvas.SetTop(im, i.y);
                 canvas.Children.Add(im);
             }
+            if (thumbBox != null && thumbBox.IsChecked == true)
+            {
+                var r = new System.Windows.Shapes.Rectangle { Width = 111, Height = 111, Stroke = Brushes.White, StrokeThickness = 1, SnapsToDevicePixels = true };
+                Canvas.SetLeft(r, 0.5); Canvas.SetTop(r, 0.5);
+                canvas.Children.Add(r);
+                var rInner = new System.Windows.Shapes.Rectangle { Width = 54, Height = 54, Stroke = Brushes.White, StrokeThickness = 1, SnapsToDevicePixels = true };
+                Canvas.SetLeft(rInner, 27.5); Canvas.SetTop(rInner, 27.5);
+                canvas.Children.Add(rInner);
+            }
+            if (zoomBox != null && zoomBox.IsChecked == true)
+            {
+                var r2 = new System.Windows.Shapes.Rectangle { Width = 161, Height = 161, Stroke = Brushes.White, StrokeThickness = 1, SnapsToDevicePixels = true };
+                Canvas.SetLeft(r2, 79.5); Canvas.SetTop(r2, 79.5);
+                canvas.Children.Add(r2);
+            }
             UpdateZoom();
         }
+
 
         void UpdateZoom()
         {
@@ -235,7 +254,7 @@ namespace XabboImager
             var counts = svc.GetNonEditorCounts();
             int availablePlanes = Math.Max(0, MAX_PLANES - counts.planes - 2);
             int availableSprites = Math.Max(0, MAX_SPRITES - counts.sprites - items.Count);
-            var est = estimateUsage(pxBuf, pxW, pxH, alphaVal, availablePlanes, availableSprites);
+            var est = estimateUsage(pxBuf, pxW, pxH, alphaVal, availablePlanes, availableSprites, modeVal, 1);
             int over = Math.Max(0, est.over);
             if (overflow != null) overflow.Text = over > 0 ? ($"Pixel Overflow: {over}") : "";
         }
@@ -247,7 +266,7 @@ namespace XabboImager
 
             if (pxBuf != null && pxW > 0 && pxH > 0 && HasVisible(pxBuf))
             {
-                BuildPixelElements(pxBuf, pxW, pxH, offX, offY, newPlanes, newSprites);
+                BuildElements(pxBuf, pxW, pxH, offX, offY, newPlanes, newSprites);
             }
 
             
@@ -421,6 +440,73 @@ namespace XabboImager
             }
         }
 
+        static void BuildPixelElementsOld(byte[] buf, int w, int h, int ox, int oy, JsonArray planes, JsonArray sprites)
+        {
+            int stride = w * 4;
+            var pixels = new List<(int x,int y,int color)>();
+            for (int y=0;y<h;y++)
+            for (int x=0;x<w;x++)
+            {
+                int i = y*stride + x*4;
+                if (buf[i+3] == 0) continue;
+                int b = buf[i+0]; int g = buf[i+1]; int r = buf[i+2];
+                int col = (r<<16)|(g<<8)|b;
+                pixels.Add((ox+x, oy+y, col));
+            }
+            double baseZ = -350;
+            int planeCount = 0;
+            foreach (var p in pixels)
+            {
+                if (planeCount >= MAX_PLANES - 2) break;
+                var plane = new JsonObject
+                {
+                    ["color"] = p.color,
+                    ["z"] = baseZ + planeCount*0.00001,
+                    ["cornerPoints"] = new JsonArray
+                    {
+                        new JsonObject{["x"]=p.x+1,["y"]=p.y+1},
+                        new JsonObject{["x"]=p.x,["y"]=p.y+1},
+                        new JsonObject{["x"]=p.x+1,["y"]=p.y},
+                        new JsonObject{["x"]=p.x,["y"]=p.y}
+                    },
+                    ["texCols"] = new JsonArray(),
+                    ["masks"] = new JsonArray(),
+                    ["bottomAligned"] = false,
+                    ["type"] = "pixel_art_plane"
+                };
+                planes.Add(plane);
+                planeCount++;
+            }
+            int spriteCount = 0; int spriteNameIndex = 0; double spriteBaseZ = baseZ - 100;
+            for (int i=planeCount; i<pixels.Count && spriteCount<MAX_SPRITES; i++)
+            {
+                var p = pixels[i];
+                var name = "pixel";
+                var pool = Instance?.spritePool;
+                if (pool != null && pool.Count > 0) name = pool[spriteNameIndex % pool.Count];
+                var sp = new JsonObject
+                {
+                    ["flipH"] = false,
+                    ["x"] = p.x,
+                    ["y"] = p.y,
+                    ["z"] = spriteBaseZ - spriteCount*0.00001,
+                    ["color"] = p.color,
+                    ["name"] = name,
+                    ["type"] = "pixel_art_sprite"
+                };
+                sprites.Add(sp);
+                spriteCount++;
+                spriteNameIndex++;
+            }
+        }
+
+
+        void BuildElements(byte[] buf, int w, int h, int ox, int oy, JsonArray planes, JsonArray sprites)
+        {
+            if (modeVal == 0) { BuildPixelElementsOld(buf, w, h, ox, oy, planes, sprites); return; }
+            if (modeVal == 1) { BuildPixelElements(buf, w, h, ox, oy, planes, sprites); return; }
+        }
+
         static bool HasVisible(byte[] buf)
         {
             for (int i=3;i<buf.Length;i+=4) if (buf[i]>0) return true;
@@ -483,7 +569,7 @@ namespace XabboImager
             if (dlg.ShowDialog()==true)
             {
                 var b = new BitmapImage(); b.BeginInit(); b.UriSource=new Uri(dlg.FileName, UriKind.Absolute); b.CacheOption=BitmapCacheOption.OnLoad; b.EndInit();
-                srcImg = b; offX = 0; offY = 0; AutoScaleToLimits(true); UpdateProcessed();
+                srcImg = b; offX = 0; offY = 0; userMovedOffset = false; AutoScaleToLimits(true); UpdateProcessed();
             }
         }
 
@@ -524,8 +610,16 @@ namespace XabboImager
                 if (buf[i+3] < alphaVal) { buf[i]=0; buf[i+1]=0; buf[i+2]=0; buf[i+3]=0; }
             }
             pxBuf = buf;
+            if (!userMovedOffset) CenterContent();
             Redraw();
             UpdateOverflow();
+        }
+
+        void CenterContent()
+        {
+            if (pxBuf == null) return;
+            offX = (int)Math.Round(160 - pxW / 2.0);
+            offY = (int)Math.Round(160 - pxH / 2.0);
         }
 
         void AutoScaleToLimits(bool applyToSlider = true)
@@ -548,7 +642,7 @@ namespace XabboImager
                 byte[] tmp = new byte[wb.PixelHeight * stride];
                 wb.CopyPixels(tmp, stride, 0);
                 for (int y=0;y<wb.PixelHeight;y++) for (int x=0;x<wb.PixelWidth;x++) { int i=y*stride + x*4; if (tmp[i+3] <= alphaVal) { tmp[i]=0; tmp[i+1]=0; tmp[i+2]=0; tmp[i+3]=0; } }
-                var est = estimateUsage(tmp, sw, sh, alphaVal, availablePlanes, availableSprites);
+                var est = estimateUsage(tmp, sw, sh, alphaVal, availablePlanes, availableSprites, modeVal, 1);
                 if (est.over > 0) hi = mid; else { best = mid; lo = mid; }
             }
             autoScalePercent = Math.Clamp(best, 1.0, 100.0);
@@ -558,60 +652,74 @@ namespace XabboImager
             }
         }
 
-        static (int planes, int sprites, int over) estimateUsage(byte[] buf, int w, int h, int alpha, int availPlanes, int availSprites)
+        static (int planes, int sprites, int over) estimateUsage(byte[] buf, int w, int h, int alpha, int availPlanes, int availSprites, int mode, int l)
         {
-            int stride = w * 4;
-            bool[] used = new bool[w * h];
-            int tol = 48;
-            int planes = 0;
-            for (int y = 0; y <= h - 3 && planes < availPlanes; y++)
+            if (mode == 0)
             {
-                for (int x = 0; x <= w - 3 && planes < availPlanes; x++)
+                int stride = w * 4;
+                int visible = 0;
+                for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) { int i = y * stride + x * 4; if (buf[i + 3] > alpha) visible++; }
+                int usePlanes = Math.Min(availPlanes, visible);
+                int remain = visible - usePlanes;
+                int useSprites = Math.Min(availSprites, Math.Max(0, remain));
+                int over = Math.Max(0, visible - usePlanes - useSprites);
+                return (usePlanes, useSprites, over);
+            }
+            if (mode == 1)
+            {
+                int stride = w * 4;
+                bool[] used = new bool[w * h];
+                int planes = 0;
+                for (int y = 0; y <= h - 3 && planes < availPlanes; y++)
                 {
-                    bool ok = true;
-                    int sumR = 0, sumG = 0, sumB = 0;
-                    for (int dy = 0; dy < 3 && ok; dy++)
-                    for (int dx = 0; dx < 3 && ok; dx++)
+                    for (int x = 0; x <= w - 3 && planes < availPlanes; x++)
                     {
-                        int xx = x + dx; int yy = y + dy; int idx = yy * stride + xx * 4; int pi = yy * w + xx;
-                        if (used[pi]) { ok = false; break; }
-                        if (buf[idx + 3] <= alpha) { ok = false; break; }
-                        int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
-                        sumR += r; sumG += g; sumB += b;
+                        bool ok = true;
+                        int sumR = 0, sumG = 0, sumB = 0;
+                        for (int dy = 0; dy < 3 && ok; dy++)
+                        for (int dx = 0; dx < 3 && ok; dx++)
+                        {
+                            int xx = x + dx; int yy = y + dy; int idx = yy * stride + xx * 4; int pi = yy * w + xx;
+                            if (used[pi]) { ok = false; break; }
+                            if (buf[idx + 3] <= alpha) { ok = false; break; }
+                            int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
+                            sumR += r; sumG += g; sumB += b;
+                        }
+                        if (!ok) continue;
+                        int avgR = sumR / 9; int avgG = sumG / 9; int avgB = sumB / 9;
+                        for (int dy = 0; dy < 3 && ok; dy++)
+                        for (int dx = 0; dx < 3 && ok; dx++)
+                        {
+                            int xx = x + dx; int yy = y + dy; int idx = yy * stride + xx * 4;
+                            int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
+                            if (Math.Abs(r - avgR) > 48 || Math.Abs(g - avgG) > 48 || Math.Abs(b - avgB) > 48) { ok = false; break; }
+                        }
+                        if (!ok) continue;
+                        for (int dy = 0; dy < 3; dy++)
+                        for (int dx = 0; dx < 3; dx++)
+                        {
+                            int xx = x + dx; int yy = y + dy; int pi = yy * w + xx;
+                            used[pi] = true;
+                        }
+                        planes++;
                     }
-                    if (!ok) continue;
-                    int avgR = sumR / 9; int avgG = sumG / 9; int avgB = sumB / 9;
-                    for (int dy = 0; dy < 3 && ok; dy++)
-                    for (int dx = 0; dx < 3 && ok; dx++)
-                    {
-                        int xx = x + dx; int yy = y + dy; int idx = yy * stride + xx * 4;
-                        int b = buf[idx + 0]; int g = buf[idx + 1]; int r = buf[idx + 2];
-                        if (Math.Abs(r - avgR) > tol || Math.Abs(g - avgG) > tol || Math.Abs(b - avgB) > tol) { ok = false; break; }
-                    }
-                    if (!ok) continue;
-                    for (int dy = 0; dy < 3; dy++)
-                    for (int dx = 0; dx < 3; dx++)
-                    {
-                        int xx = x + dx; int yy = y + dy; int pi = yy * w + xx;
-                        used[pi] = true;
-                    }
-                    planes++;
                 }
+                int singles = 0;
+                for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int idx = y * stride + x * 4; int pi = y * w + x;
+                    if (used[pi]) continue;
+                    if (buf[idx + 3] > alpha) singles++;
+                }
+                int planeRemain = Math.Max(0, availPlanes - planes);
+                int planeSingles = Math.Min(planeRemain, singles);
+                singles -= planeSingles;
+                int sprites = Math.Min(availSprites, Math.Max(0, singles));
+                int over = Math.Max(0, singles - sprites);
+                return (planes + planeSingles, sprites, over);
             }
-            int singles = 0;
-            for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-            {
-                int idx = y * stride + x * 4; int pi = y * w + x;
-                if (used[pi]) continue;
-                if (buf[idx + 3] > alpha) singles++;
-            }
-            int planeRemain = Math.Max(0, availPlanes - planes);
-            int planeSingles = Math.Min(planeRemain, singles);
-            singles -= planeSingles;
-            int sprites = Math.Min(availSprites, Math.Max(0, singles));
-            int over = Math.Max(0, singles - sprites);
-            return (planes + planeSingles, sprites, over);
+            { return (0, 0, 0); }
         }
 
         static double PercentFromSlider(double controlVal)
@@ -626,11 +734,34 @@ namespace XabboImager
             return Math.Sqrt(p * 100.0);
         }
 
+        
+
+        void ModeSel_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (modeSel?.SelectedItem is ComboBoxItem ci)
+            {
+                var t = (ci.Tag as string) ?? "mix3";
+                modeVal = t == "old" ? 0 : 1;
+                AutoScaleToLimits(!userScaled || Math.Abs(scale.Value - autoScalePercent) < 0.5);
+                UpdateProcessed();
+            }
+        }
+
+        void ZoomForce_Changed(object sender, RoutedEventArgs e)
+        {
+            svc?.SetZoomForced(zoomForce?.IsChecked == true);
+        }
+
+        void Overlay_Changed(object sender, RoutedEventArgs e)
+        {
+            Redraw();
+        }
+
         void TryUpdateCanvasBg()
         {
             if (serverBgInCanvas == null) return;
             var src = preview?.Source as ImageSource;
-            bool on = bgSwitch != null && Math.Round(bgSwitch.Value) == 1;
+            bool on = serverPreview != null && serverPreview.IsChecked == true;
             if (src != null && on)
             {
                 serverBgInCanvas.Source = src;
@@ -650,7 +781,7 @@ namespace XabboImager
             }
         }
 
-        void BgSwitch_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { TryUpdateCanvasBg(); }
+        void ServerPreview_Changed(object sender, RoutedEventArgs e) { TryUpdateCanvasBg(); }
 
         void Title_MouseDown(object sender, MouseButtonEventArgs e)
         {

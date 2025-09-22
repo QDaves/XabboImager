@@ -21,6 +21,7 @@ namespace XabboImager
         bool cap = true;
         bool inj;
         bool activated;
+        bool zoomForced;
         public event Action? Started;
         public event Action? Stopped;
         JsonArray planes = new();
@@ -38,7 +39,7 @@ namespace XabboImager
                 Name = "XabboImager",
                 Description = "photo injector",
                 Author = "QDave",
-                Version = "1.0",
+                Version = "1.1",
                 ShowDeleteButton = true,
                 ShowLeaveButton = true
             });
@@ -151,6 +152,7 @@ namespace XabboImager
                 photo.Planes = p;
                 photo.Sprites = s;
                 photo.Filters = filters.DeepClone().AsArray();
+                if (zoomForced) photo.ForceZoom(2);
                 var newJson = photo.Build();
                 var comp = Deflate(Encoding.UTF8.GetBytes(newJson));
                 var payload = new byte[4 + comp.Length];
@@ -253,5 +255,7 @@ namespace XabboImager
         public JsonArray GetPlanes() => planes.DeepClone().AsArray();
         public JsonArray GetSprites() => sprites.DeepClone().AsArray();
         public JsonArray GetFilters() => filters.DeepClone().AsArray();
+
+        public void SetZoomForced(bool on) => zoomForced = on;
     }
 }

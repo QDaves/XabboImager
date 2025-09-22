@@ -8,7 +8,7 @@
     <AssemblyName>XabboImager</AssemblyName>
     <RootNamespace>XabboImager</RootNamespace>
     <NoWarn>CA1416</NoWarn>
-    <Version>1.0</Version>
+    <Version>1.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
